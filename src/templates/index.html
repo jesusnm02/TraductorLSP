@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Traductor y Entrenador LSP - Municipalidad</title>
+    <style>
+        body { background-color: #f0f8ff; color: #003366; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 0; }
+        header { background-color: #00509e; color: white; padding: 15px; text-align: center;}
+        h1 { margin: 0; font-size: 1.8em; }
+        .main-container { display: flex; padding: 20px; gap: 20px; justify-content: center; align-items: flex-start; flex-wrap: wrap;}
+        .camera-panel { display: flex; flex-direction: column; align-items: center; width: 640px; }
+        
+        /* Contenedor del video con Position Relative para el botón flotante */
+        #video-container { border: 5px solid #00509e; border-radius: 10px; width: 100%; background: black; overflow: hidden; position: relative; }
+        
+        /* Botón Flotante para Tomar Foto */
+        #btnTomarFoto { 
+            display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
+            width: 250px; background-color: #ffc107; color: #003366; font-size: 1.3em; font-weight: bold;
+            padding: 15px; border: 3px solid white; border-radius: 30px; cursor: pointer;
+            box-shadow: 0px 5px 15px rgba(0,0,0,0.5); transition: 0.2s; z-index: 10;
+        }
+        #btnTomarFoto:active { transform: translateX(-50%) scale(0.95); background-color: #e0a800; }
+
+        #traduccion { font-size: 2.5em; font-weight: bold; color: #00509e; height: 50px; margin: 15px 0; text-align: center; text-transform: uppercase;}
+        .controles-camara { display: flex; gap: 10px; width: 100%; }
+        .btn { background-color: #00509e; color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; flex: 1; font-size: 1.1em;}
+        .btn-green { background-color: #28a745; }
+        .btn-red { background-color: #dc3545; }
+        .btn:hover { opacity: 0.9; }
+        .side-panel { display: flex; flex-direction: column; gap: 20px; width: 400px; }
+        .box { background: white; border: 2px solid #00509e; border-radius: 10px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);}
+        .chat-area { display: flex; flex-direction: column; gap: 10px; }
+        .chat-bubble { padding: 10px; border-radius: 8px; font-size: 1.1em; border: 1px solid #ccc; min-height: 40px;}
+        .bubble-sordo { background-color: #e6f2ff; border: 2px solid #00509e; font-family: inherit; resize: vertical; width: 100%; box-sizing: border-box;}
+        .bubble-muni { background-color: #f8f9fa; border-left: 5px solid #28a745; }
+        .input-muni-container { display: flex; gap: 5px; margin-top: 10px;}
+        .input-muni-container input { flex: 1; padding: 10px; border: 1px solid #00509e; border-radius: 5px; }
+        input, select { width: 100%; padding: 10px; margin: 5px 0 15px 0; border: 1px solid #00509e; border-radius: 5px; box-sizing: border-box;}
+        h3 { margin-top: 0; color: #00509e; border-bottom: 2px solid #f0f8ff; padding-bottom: 5px;}
+        #contenedorProgreso { display: none; margin-top: 15px; }
+        progress { width: 100%; height: 20px; accent-color: #28a745; }
+    </style>
+</head>
+<body>
+
+    <header><h1>Mesa de Partes Inclusiva - Traductor LSP</h1></header>
+
+    <div class="main-container">
+        <div class="camera-panel">
+            <div id="video-container">
+                <img src="{{ url_for('video_feed') }}" width="640" height="480">
+                <!-- Botón de Cámara Flotante para Categorías Estáticas -->
+                <button id="btnTomarFoto" onclick="ejecutarFotoManual()">📸 TOMAR FOTO</button>
+            </div>
+            <div id="traduccion">...</div>
+            <div class="controles-camara">
+                <button class="btn btn-green" onclick="repetirDictado()">🔊 Dictar Oración Completa</button>
+                <button class="btn btn-red" onclick="resetearPalabra()">🔄 Resetear Memoria</button>
+            </div>
+        </div>
+
+        <div class="side-panel">
+            <div class="box">
+                <h3>💬 Panel de Conversación</h3>
+                <div class="chat-area">
+                    <div>
+                        <small><strong>Ciudadano (Puede editar su texto aquí):</strong></small>
+                        <textarea id="input-sordo" class="bubble-sordo" rows="3" placeholder="Las palabras traducidas aparecerán aquí..."></textarea>
+                        <button onclick="limpiarHistorialSordo()" style="margin-top:5px; font-size:0.8em; cursor:pointer;">🗑️ Limpiar texto</button>
+                    </div>
+                    <div>
+                        <small><strong>Personal Municipal:</strong></small>
+                        <div class="chat-bubble bubble-muni" id="historial-muni"></div>
+                    </div>
+                </div>
+                <div class="input-muni-container">
+                    <input type="text" id="input-muni" placeholder="Escriba su respuesta al ciudadano...">
+                    <button class="btn" style="flex:0.4;" onclick="enviarMensajeMuni()">Enviar</button>
+                </div>
+            </div>
+
+            <div class="box">
+                <h3>🧠 Control de IA y Entrenamiento</h3>
+                <label><strong>1. Cargar Categoría Existente:</strong></label>
+                <div style="display:flex; gap:5px;">
+                    <select id="catSelect" style="margin:0;">
+                        {% for cat in categorias %}
+                            <option value="{{ cat }}">{{ cat.upper() }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="btn" style="margin:0; padding:10px;" onclick="cambiarCategoria()">Cargar</button>
+                </div>
+
+                <hr style="border: 0.5px solid #eee; margin: 15px 0;">
+                
+                <label><strong>2. Agregar / Entrenar Palabras:</strong></label>
+                <select id="selectNuevaCategoria" onchange="verificarCategoriaNueva()">
+                    <option value="">-- Selecciona Categoría --</option>
+                    {% for cat in categorias %}
+                        <option value="{{ cat }}">{{ cat.upper() }}</option>
+                    {% endfor %}
+                    <option value="NUEVO" style="font-weight: bold;">➕ CREAR NUEVA CATEGORÍA...</option>
+                </select>
+                
+                <div id="opcionesNuevaCategoria" style="display:none;">
+                    <select id="tipoNuevaCategoria" style="background-color:#e6f2ff;">
+                        <option value="dinamico">Dinámica (Video / Cuerpo y Manos)</option>
+                        <option value="estatico">Estática (Foto / Solo Manos)</option>
+                    </select>
+                    <input type="text" id="inputCategoriaNueva" placeholder="Nombre de categoría (ej. colores)">
+                </div>
+                
+                <input type="text" id="nuevaPalabra" placeholder="Palabra a grabar (ej. uno)">
+                <button class="btn btn-red" onclick="iniciarGrabacion()">📹 Grabar Señal</button>
+                <p id="estadoGrabacion" style="color: red; font-weight: bold; text-align: center; margin: 5px 0;"></p>
+                
+                <button class="btn btn-green" onclick="entrenarModelo()">🧠 Entrenar/Actualizar Modelo</button>
+                
+                <div id="contenedorProgreso">
+                    <p id="estadoEntrenamiento" style="color: #00509e; font-weight: bold; text-align: center; margin: 5px 0;">Iniciando...</p>
+                    <progress id="barraIA" value="0" max="100"></progress>
+                    <small id="porcentajeIA" style="display:block; text-align:center;">0%</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ultimaPalabra = "";
+
+        setInterval(() => {
+            fetch('/traduccion_actual').then(r => r.json()).then(data => {
+                let txt = data.palabra.replace(/_/g, ' ');
+                if (txt === "") {
+                    document.getElementById('traduccion').innerText = "...";
+                    ultimaPalabra = "";
+                } else if (txt !== "GRABANDO...") {
+                    document.getElementById('traduccion').innerText = txt;
+                    if (txt !== ultimaPalabra) {
+                        ultimaPalabra = txt;
+                        let msg = new SpeechSynthesisUtterance(txt);
+                        msg.lang = 'es-ES';
+                        window.speechSynthesis.speak(msg);
+                        let cajaSordo = document.getElementById('input-sordo');
+                        cajaSordo.value += txt + " ";
+                        fetch('/resetear_traduccion', {method: 'POST'});
+                    }
+                } else {
+                    document.getElementById('traduccion').innerText = txt;
+                }
+            });
+        }, 300);
+
+        function repetirDictado() {
+            let oracion = document.getElementById('input-sordo').value.trim();
+            if(oracion !== "") {
+                let msg = new SpeechSynthesisUtterance(oracion);
+                msg.lang = 'es-ES';
+                window.speechSynthesis.speak(msg);
+            }
+        }
+        function resetearPalabra() { fetch('/resetear_traduccion', {method: 'POST'}); document.getElementById('traduccion').innerText = "..."; ultimaPalabra = ""; }
+        function limpiarHistorialSordo() { document.getElementById('input-sordo').value = ""; }
+        function enviarMensajeMuni() { let input = document.getElementById('input-muni'); if(input.value.trim() !== "") { document.getElementById('historial-muni').innerText = input.value.trim(); input.value = ""; } }
+
+        function cambiarCategoria() {
+            fetch('/cambiar_categoria', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({categoria: document.getElementById('catSelect').value})
+            }).then(r => r.json()).then(d => alert(d.status === 'ok' ? 'Modelo cargado.' : d.mensaje));
+        }
+
+        function verificarCategoriaNueva() {
+            let sel = document.getElementById('selectNuevaCategoria').value;
+            document.getElementById('opcionesNuevaCategoria').style.display = (sel === "NUEVO") ? "block" : "none";
+        }
+
+        function obtenerCategoriaParaEntrenar() {
+            let sel = document.getElementById('selectNuevaCategoria').value;
+            if (sel === "NUEVO") {
+                let nombre = document.getElementById('inputCategoriaNueva').value.trim().toLowerCase().replace(/\s+/g, '_');
+                let tipo = document.getElementById('tipoNuevaCategoria').value;
+                return tipo + "_" + nombre; 
+            }
+            return sel;
+        }
+
+        // =====================================
+        // LÓGICA DE CAPTURA MANUAL (ESTÁTICO)
+        // =====================================
+        function ejecutarFotoManual() {
+            // Envía la señal al servidor de que el botón se ha presionado
+            fetch('/capturar_foto', {method: 'POST'});
+        }
+
+        let monitorGrabacion;
+        function iniciarGrabacion() {
+            const cat = obtenerCategoriaParaEntrenar();
+            const pal = document.getElementById('nuevaPalabra').value.trim();
+            if(!cat || !pal) return alert("Por favor, selecciona categoría y palabra.");
+            
+            fetch('/iniciar_grabacion', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({categoria: cat, palabra: pal}) });
+
+            // Mostrar el botón flotante SOLO si la categoría es estática
+            if(cat.includes('estatico')) {
+                document.getElementById('btnTomarFoto').style.display = 'block';
+            }
+
+            monitorGrabacion = setInterval(() => {
+                fetch('/estado_grabacion').then(r => r.json()).then(data => {
+                    document.getElementById('estadoGrabacion').innerText = data.grabando ? `Capturando ${cat.includes('estatico') ? 'Fotos' : 'Videos'}: ${data.progreso}/30` : "✅ Captura Completada";
+                    
+                    if(!data.grabando) {
+                        clearInterval(monitorGrabacion);
+                        // Ocultar el botón flotante al terminar
+                        document.getElementById('btnTomarFoto').style.display = 'none';
+                    }
+                });
+            }, 500);
+        }
+
+        let monitorIA;
+        function entrenarModelo() {
+            const cat = obtenerCategoriaParaEntrenar();
+            if(!cat) return alert("Selecciona o escribe una categoría para entrenar.");
+            
+            document.getElementById('contenedorProgreso').style.display = "block";
+            document.getElementById('estadoEntrenamiento').innerText = "Solicitando entrenamiento al servidor...";
+            document.getElementById('barraIA').value = 0;
+            document.getElementById('porcentajeIA').innerText = "0%";
+
+            fetch('/entrenar_modelo', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({categoria: cat})
+            });
+
+            monitorIA = setInterval(() => {
+                fetch('/progreso_entrenamiento').then(r => r.json()).then(data => {
+                    document.getElementById('estadoEntrenamiento').innerText = data.mensaje;
+                    document.getElementById('barraIA').value = data.progreso;
+                    document.getElementById('porcentajeIA').innerText = data.progreso + "%";
+
+                    if (!data.entrenando && data.mensaje.includes("COMPLETADO")) {
+                        clearInterval(monitorIA);
+                        alert("El entrenamiento ha finalizado y el modelo ha sido guardado exitosamente.");
+                        location.reload(); 
+                    } else if (!data.entrenando && data.mensaje.includes("Error")) {
+                        clearInterval(monitorIA);
+                        alert(data.mensaje);
+                    }
+                });
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
